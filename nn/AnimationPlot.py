@@ -5,26 +5,22 @@ import matplotlib.animation as animation
 import matplotlib.colors as colors
 from matplotlib.animation import ArtistAnimation
 import matplotlib.patheffects as pe
-
+import json
 import sys
 sys.path.append('../motion/')
 
 from Quaternions import Quaternions
 
 def animation_plot(animations, filename=None, ignore_root=False, interval=33.33):
-    
     footsteps = []
-    
     for ai in range(len(animations)):
         anim = np.swapaxes(animations[ai][0].copy(), 0, 1)
-        
         joints, root_x, root_z, root_r = anim[:,:-7], anim[:,-7], anim[:,-6], anim[:,-5]
         joints = joints.reshape((len(joints), -1, 3))
-        
         rotation = Quaternions.id(1)
         offsets = []
         translation = np.array([[0,0,0]])
-        
+        data_assembly = {}
         if not ignore_root:
             for i in range(len(joints)):
                 joints[i,:,:] = rotation * joints[i]
@@ -33,8 +29,14 @@ def animation_plot(animations, filename=None, ignore_root=False, interval=33.33)
                 rotation = Quaternions.from_angle_axis(-root_r[i], np.array([0,1,0])) * rotation
                 offsets.append(rotation * np.array([0,0,1]))
                 translation = translation + rotation * np.array([root_x[i], 0, root_z[i]])
-        
-        animations[ai] = joints
+                data_assembly[str(i)] = {}
+                for jnt in range(len(joints[i,:,:])):
+                    print "joint ",i, " ", joints[i,jnt,:]
+                    data_assembly[str(i)][jnt] = {"translate": list(joints[i,jnt,:]),
+                                                  "rot": []}
+        animations[ai] = joints    
+        with open('/home/flyn/test_maya.txt', 'w') as outfile:
+            json.dump(data_assembly, outfile)
         footsteps.append(anim[:,-4:])
     
         """
@@ -58,7 +60,6 @@ def animation_plot(animations, filename=None, ignore_root=False, interval=33.33)
         """
         
     #raise Exception()
-    
     footsteps = np.array(footsteps)
     
     scale = 1.25*((len(animations))/2)
@@ -85,13 +86,11 @@ def animation_plot(animations, filename=None, ignore_root=False, interval=33.33)
     def animate(i):
         
         changed = []
-        
         for ai in range(len(animations)):
         
             offset = 25*(ai-((len(animations))/2))
         
             for j in range(len(parents)):
-                
                 if parents[j] != -1:
                     lines[ai][j].set_data(
                         [ animations[ai][i,j,0]+offset, animations[ai][i,parents[j],0]+offset],
@@ -105,8 +104,7 @@ def animation_plot(animations, filename=None, ignore_root=False, interval=33.33)
         
     plt.tight_layout()
         
-    ani = animation.FuncAnimation(fig, 
-        animate, np.arange(len(animations[0])), interval=interval)
+    ani = animation.FuncAnimation(fig, animate, np.arange(len(animations[0])), interval=interval)
     
     if filename != None:
         #ani.save(filename, fps=30, bitrate=13934)
@@ -114,6 +112,7 @@ def animation_plot(animations, filename=None, ignore_root=False, interval=33.33)
         for i, a, f in zip(range(len(animations)), animations, footsteps):
             data['anim_%i' % i] = a
             data['anim_%i_footsteps' % i] = f
+        print data
         np.savez_compressed(filename.replace('.mp4','.npz'), **data)
     
     try:
